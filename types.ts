@@ -1,0 +1,38 @@
+
+export interface User {
+  id: string;
+  username: string;
+  lastActive: number;
+  acceptingRequests: boolean; // Consent flag
+  isDeciding?: boolean;       // Anti-spam busy flag
+}
+
+export interface Message {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  timestamp: number;
+  roomId: string;
+}
+
+export interface PrivateRoom {
+  id: string;
+  participants: string[];
+  reconnectCode: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface ChatRequest {
+  id: string;
+  fromId: string;
+  fromName: string;
+  toId: string;
+  timestamp: number;
+}
+
+export enum RoomType {
+  COMMUNITY = 'community',
+  PRIVATE = 'private'
+}
