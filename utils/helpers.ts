@@ -1,7 +1,7 @@
 
 export const generateId = () => Math.random().toString(36).substring(2, 15);
 
-export const generateUsername = () => `Anon-${Math.floor(Math.random() * 9000 + 1000)}`;
+export const generateUsername = () => `GHOST-${Math.floor(Math.random() * 90000 + 10000)}`;
 
 export const generateReconnectCode = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
