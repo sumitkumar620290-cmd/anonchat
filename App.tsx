@@ -33,11 +33,11 @@ interface ErrorPayload {
 }
 
 const App: React.FC = () => {
-  const BMC_LINK = "https://buymeacoffee.com/";
+  const BMC_LINK = "https://buymeacoffee.com/ghosttalk";
   
   // UI States
   const [isAgeVerified, setIsAgeVerified] = useState<boolean | null>(null);
-  const [showPeers, setShowPeers] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [showExtendPopup, setShowExtendPopup] = useState<string | null>(null);
@@ -306,51 +306,77 @@ const App: React.FC = () => {
   const activeRoomTimeLeft = activePrivateRoom ? Math.max(0, activePrivateRoom.expiresAt - currentTime) : 0;
   const isFinalFive = activePrivateRoom && activePrivateRoom.extended && activeRoomTimeLeft <= 300000;
 
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full">
+      <div className="flex flex-col items-start mb-8">
+        <div className="w-10 h-10 bg-blue-600/10 rounded-xl flex items-center justify-center mb-3 border border-blue-600/20 shadow-xl group hover:scale-105 transition-transform">
+          <span className="text-xl">👻</span>
+        </div>
+        <div>
+          <p className="text-lg font-black tracking-tighter leading-none text-white">GhostTalk</p>
+          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1 leading-tight">Temporary conversations.</p>
+        </div>
+      </div>
+      
+      <div className="space-y-6 mb-auto overflow-y-auto custom-scrollbar pr-1">
+        <div>
+          <h4 className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-3">Identity</h4>
+          <div className="bg-slate-800/50 p-3 rounded-lg border border-white/5">
+            <p className="text-[9px] text-slate-500 uppercase font-black mb-0.5">Your Ghost ID</p>
+            <p className="text-xs font-mono font-bold text-blue-400">{currentUser.username}</p>
+          </div>
+        </div>
+
+        <div>
+          <h4 className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-2">Guidelines</h4>
+          <ul className="text-[10px] text-slate-400 space-y-2.5 font-medium">
+            <li className="flex items-start"><span className="text-blue-500 mr-1.5 font-bold">✔</span> Total anonymity</li>
+            <li className="flex items-start"><span className="text-blue-500 mr-1.5 font-bold">✔</span> Mutual consent for private</li>
+            <li className="flex items-start"><span className="text-red-500 mr-1.5 font-bold">✘</span> No persistent data</li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="font-black text-white/40 uppercase text-[9px] tracking-widest mb-3">Live Peers</h3>
+          <div className="space-y-1.5">
+            {[...onlineUsers.values()].filter((u: User) => u.id !== currentUser.id).map((u: User) => (
+              <button key={u.id} onClick={() => { setUserPopup({ userId: u.id, username: u.username }); setShowSettings(false); }} className="w-full text-left p-2.5 bg-white/[0.02] border border-white/[0.04] rounded-lg group transition-colors hover:bg-white/[0.05]">
+                <p className="text-[11px] font-bold truncate text-white group-hover:text-blue-400">{u.username}</p>
+                <span className={`text-[7px] font-bold uppercase mt-0.5 block ${u.acceptingRequests ? 'text-blue-500' : 'text-slate-700'}`}>{u.acceptingRequests ? 'Accepting' : 'Busy'}</span>
+              </button>
+            ))}
+            {onlineUsers.size <= 1 && (
+              <p className="text-[8px] text-slate-600 italic">No other spirits nearby...</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 pt-6 border-t border-white/5 space-y-2">
+        <button onClick={() => { setShowReconnectModal(true); setShowSettings(false); }} className="w-full py-2.5 bg-slate-800 rounded-lg text-[9px] font-black uppercase border border-white/5 flex items-center justify-center space-x-1.5 hover:bg-slate-700 transition-colors">
+          <span>🔑</span><span>Restore Session</span>
+        </button>
+        <a href={BMC_LINK} target="_blank" rel="noopener noreferrer" className="w-full py-3 bg-blue-600/10 text-blue-400 rounded-lg text-[9px] font-black uppercase text-center border border-blue-600/20 hover:bg-blue-600/20 transition-all flex items-center justify-center space-x-1.5">
+          <span>☕</span><span>Support Developer</span>
+        </a>
+        <button onClick={() => setShowSettings(false)} className="md:hidden w-full py-2 text-slate-600 font-bold uppercase text-[9px]">Close Menu</button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex flex-col md:flex-row h-[100dvh] w-screen overflow-hidden bg-slate-950 text-slate-100 selection:bg-blue-500/30">
+      {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-64 bg-slate-900 border-r border-white/5 shrink-0 p-6">
-        <div className="flex flex-col items-start mb-8">
-          <div className="w-10 h-10 bg-blue-600/10 rounded-xl flex items-center justify-center mb-3 border border-blue-600/20 shadow-xl group hover:scale-105 transition-transform">
-            <span className="text-xl">👻</span>
-          </div>
-          <div>
-            <p className="text-lg font-black tracking-tighter leading-none text-white">GhostTalk</p>
-            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1 leading-tight">Ephemeral messaging.</p>
-          </div>
-        </div>
-        
-        <div className="space-y-6 mb-auto">
-          <div>
-            <h4 className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-3">Identity</h4>
-            <div className="bg-slate-800/50 p-3 rounded-lg border border-white/5">
-              <p className="text-[9px] text-slate-500 uppercase font-black mb-0.5">Ghost ID</p>
-              <p className="text-xs font-mono font-bold text-blue-400">{currentUser.username}</p>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-2">Rules</h4>
-            <ul className="text-[10px] text-slate-400 space-y-2 font-medium">
-              <li className="flex items-start"><span className="text-blue-500 mr-1.5">✔</span> Total Anonymity</li>
-              <li className="flex items-start"><span className="text-blue-500 mr-1.5">✔</span> No Logs</li>
-              <li className="flex items-start"><span className="text-red-500 mr-1.5">✘</span> No Identity</li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="mt-6 space-y-2">
-          <button onClick={() => setShowReconnectModal(true)} className="w-full py-2.5 bg-slate-800 rounded-lg text-[9px] font-black uppercase border border-white/5 flex items-center justify-center space-x-1.5 hover:bg-slate-700 transition-colors">
-            <span>🔑</span><span>Restore</span>
-          </button>
-          <a href={BMC_LINK} target="_blank" rel="noopener noreferrer" className="w-full py-2.5 bg-blue-600/10 text-blue-400 rounded-lg text-[9px] font-black uppercase text-center border border-blue-600/20 hover:bg-blue-600/20 transition-all">Support Dev</a>
-        </div>
+        <SidebarContent />
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="z-50 h-14 md:h-16 bg-slate-900/90 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-4 md:px-6 shrink-0">
-          <div className="flex items-center space-x-2 md:hidden">
+          <button onClick={() => setShowSettings(true)} className="flex items-center space-x-2 md:hidden">
             <div className="w-7 h-7 bg-blue-600 rounded flex items-center justify-center text-[10px] shadow-lg">👻</div>
-          </div>
+            <span className="text-[10px] font-black uppercase tracking-tighter text-white">Profile</span>
+          </button>
           
           <button 
             onClick={() => setIsOpenToPrivate(!isOpenToPrivate)}
@@ -382,7 +408,7 @@ const App: React.FC = () => {
                 </div>
               )}
             </div>
-            <button onClick={() => setShowPeers(!showPeers)} className="p-2 bg-slate-800 rounded-lg relative border border-white/5 transition-transform active:scale-90">
+            <button onClick={() => setShowSettings(!showSettings)} className="p-2 bg-slate-800 rounded-lg relative border border-white/5 transition-transform active:scale-90">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
               {onlineUsers.size > 1 && <span className="absolute -top-1 -right-1 bg-blue-600 text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center border border-slate-900 text-white">{onlineUsers.size - 1}</span>}
             </button>
@@ -430,7 +456,7 @@ const App: React.FC = () => {
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
               {isFinalFive && (
                 <div className="z-20 bg-indigo-500/20 text-indigo-300 px-3 py-1.5 text-[8px] font-black uppercase tracking-widest text-center animate-pulse border-b border-white/5">
-                  The static is closing in... session fading soon.
+                  Static increasing... session fading soon.
                 </div>
               )}
               <ChatBox 
@@ -453,7 +479,7 @@ const App: React.FC = () => {
                     <button 
                       disabled={sentRequestIds.has(userPopup.userId) || privateRooms.size > 0}
                       onClick={() => { const target = onlineUsers.get(userPopup.userId); if (target) sendRequest(target); }}
-                      className="w-full py-3 bg-blue-600 text-white font-black rounded-xl text-[9px] uppercase tracking-widest disabled:opacity-30"
+                      className="w-full py-3 bg-blue-600 text-white font-black rounded-xl text-[9px] uppercase tracking-widest disabled:opacity-30 shadow-lg shadow-blue-900/20"
                     >{sentRequestIds.has(userPopup.userId) ? 'Sent' : 'Private Request'}</button>
                     <button onClick={() => setUserPopup(null)} className="w-full py-2 text-slate-600 font-bold uppercase text-[8px] text-center">Close</button>
                   </div>
@@ -462,20 +488,10 @@ const App: React.FC = () => {
             )}
           </div>
 
-          <aside className={`fixed inset-y-0 right-0 z-[70] w-60 bg-slate-900 border-l border-white/5 transform transition-transform duration-300 ${showPeers ? 'translate-x-0 shadow-2xl' : 'translate-x-full'}`}>
-            <div className="h-full flex flex-col p-5">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="font-black text-white/40 uppercase text-[9px] tracking-widest">Peers</h3>
-                <button onClick={() => setShowPeers(false)} className="text-slate-500 hover:text-white">✕</button>
-              </div>
-              <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar">
-                {[...onlineUsers.values()].filter((u: User) => u.id !== currentUser.id).map((u: User) => (
-                  <button key={u.id} onClick={() => setUserPopup({ userId: u.id, username: u.username })} className="w-full text-left p-3 bg-white/[0.02] border border-white/[0.04] rounded-xl group transition-colors hover:bg-white/[0.05]">
-                    <p className="text-[11px] font-bold truncate text-white group-hover:text-blue-400">{u.username}</p>
-                    <span className={`text-[7px] font-bold uppercase mt-0.5 block ${u.acceptingRequests ? 'text-blue-500' : 'text-slate-700'}`}>{u.acceptingRequests ? 'Accepting' : 'Busy'}</span>
-                  </button>
-                ))}
-              </div>
+          {/* Mobile Sidebar/Menu */}
+          <aside className={`fixed inset-y-0 right-0 z-[70] w-64 bg-slate-900 border-l border-white/5 transform transition-transform duration-300 ease-out ${showSettings ? 'translate-x-0 shadow-2xl' : 'translate-x-full'} md:hidden`}>
+            <div className="h-full p-5">
+              <SidebarContent />
             </div>
           </aside>
         </main>
@@ -510,7 +526,7 @@ const App: React.FC = () => {
               placeholder="••••••" 
             />
             <button onClick={() => { socket.emit({ type: 'CHAT_REJOIN', reconnectCode: reconnectInput }); setShowReconnectModal(false); }} className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-blue-900/40">Link Channel</button>
-            <button onClick={() => setShowReconnectModal(false)} className="w-full py-3 mt-1 text-slate-600 font-bold uppercase text-[9px]">Cancel</button>
+            <button onClick={() => setShowReconnectModal(false)} className="w-full py-3 mt-1 text-slate-600 font-bold uppercase text-[9px] w-full text-center">Cancel</button>
           </div>
         </div>
       )}

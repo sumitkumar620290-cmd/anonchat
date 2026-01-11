@@ -13,36 +13,21 @@ interface ChatBoxProps {
   onReport?: (msgId: string) => void;
 }
 
-const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage, title, isCommunity, onUserClick }) => {
+const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage, onUserClick }) => {
   const [inputText, setInputText] = useState('');
-  const [visibleMessages, setVisibleMessages] = useState<Message[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isAtBottom = useRef(true);
   const [now, setNow] = useState(Date.now());
 
+  // Clock to trigger re-renders for the 5-minute fading/expiry
   useEffect(() => {
     const ticker = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(ticker);
   }, []);
 
-  useEffect(() => {
-    const filterMessages = () => {
-      const currentTime = Date.now();
-      const filtered = messages.filter(m => currentTime - m.timestamp < 300000);
-      
-      setVisibleMessages(prev => {
-        if (prev.length === filtered.length && 
-            (prev.length === 0 || prev[prev.length-1].id === filtered[filtered.length-1].id)) {
-          return prev;
-        }
-        return filtered;
-      });
-    };
-
-    filterMessages();
-    const interval = setInterval(filterMessages, 1000);
-    return () => clearInterval(interval);
-  }, [messages]);
+  // Filter messages to show only those sent within the last 5 minutes (300,000 ms)
+  // Calculated in render body for absolute reliability and instant updates
+  const visibleMessages = messages.filter(m => now - m.timestamp < 300000);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
     if (scrollRef.current) {
@@ -56,22 +41,22 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
   const handleScroll = () => {
     if (scrollRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-      const atBottom = scrollHeight - scrollTop - clientHeight < 50;
-      isAtBottom.current = atBottom;
+      // Use a safe threshold to detect if the user is at the bottom
+      isAtBottom.current = scrollHeight - scrollTop - clientHeight < 100;
     }
   };
 
+  // When messages arrive or change, scroll if the user was already at the bottom
   useEffect(() => {
     if (isAtBottom.current) {
       requestAnimationFrame(() => scrollToBottom('smooth'));
     }
-  }, [visibleMessages, scrollToBottom]);
+  }, [messages.length, scrollToBottom]);
 
+  // Ensure scroll position is maintained on resize (e.g., mobile keyboard)
   useEffect(() => {
     const handleResize = () => {
-      if (isAtBottom.current) {
-        scrollToBottom('auto');
-      }
+      if (isAtBottom.current) scrollToBottom('auto');
     };
     window.addEventListener('resize', handleResize);
     window.visualViewport?.addEventListener('resize', handleResize);
@@ -83,11 +68,13 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (inputText.trim()) {
-      onSendMessage(inputText.trim());
+    const text = inputText.trim();
+    if (text) {
+      onSendMessage(text);
       setInputText('');
       isAtBottom.current = true;
-      setTimeout(() => scrollToBottom('smooth'), 50);
+      // Scroll to bottom immediately after sending to show user's own message
+      setTimeout(() => scrollToBottom('smooth'), 30);
     }
   };
 
@@ -101,10 +88,16 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
         .message-disperse { animation: disperse 1s cubic-bezier(0.4, 0, 0.2, 1) forwards; pointer-events: none; }
       `}</style>
       
+      {/* WATERMARK BRANDING - Center Background */}
       <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center opacity-[0.03] select-none z-0">
-        <h2 className="text-[20vw] font-black uppercase tracking-tighter leading-none">Ghost</h2>
+        <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tighter leading-none">Ghost Talk</h2>
+        <div className="flex flex-col items-center mt-3 text-center">
+          <p className="text-[10px] md:text-xs font-bold uppercase tracking-[0.4em] opacity-60">Chats fade after 5 minutes</p>
+          <p className="text-[10px] md:text-xs font-bold uppercase tracking-[0.4em] mt-1 opacity-60">Global resets after every 30 minutes</p>
+        </div>
       </div>
 
+      {/* MESSAGES AREA */}
       <div 
         ref={scrollRef} 
         onScroll={handleScroll}
@@ -143,13 +136,14 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
               )}
               
               <div className={`relative max-w-[92%] md:max-w-[80%] py-1.5 px-3.5 rounded-xl md:rounded-2xl text-[13px] md:text-sm leading-snug shadow-sm ${isOwn ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-slate-900 text-slate-200 rounded-tl-none'}`}>
-                <div className="whitespace-pre-wrap break-words">{msg.text}</div>
+                <div className="whitespace-pre-wrap break-words font-medium">{msg.text}</div>
               </div>
             </div>
           );
         })}
       </div>
 
+      {/* INPUT AREA */}
       <div className="p-2 md:p-3 bg-slate-900/95 backdrop-blur-3xl border-t border-white/5 z-20 shrink-0">
         <form onSubmit={handleSubmit} className="max-w-3xl mx-auto flex items-center space-x-2">
           <textarea
@@ -158,11 +152,15 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
             placeholder="Ghost a message..."
             rows={1}
-            className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-[13px] focus:outline-none focus:ring-1 focus:ring-blue-500/50 text-slate-100 placeholder-slate-700 resize-none"
-            style={{ maxHeight: '100px' }}
+            className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:ring-1 focus:ring-blue-500/50 text-slate-100 placeholder-slate-700 resize-none"
+            style={{ maxHeight: '120px' }}
           />
-          <button type="submit" disabled={!inputText.trim()} className="bg-blue-600 w-10 h-10 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-20 active:scale-95 transition-transform shadow-lg shadow-blue-900/20">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+          <button 
+            type="submit" 
+            disabled={!inputText.trim()} 
+            className="bg-blue-600 w-11 h-11 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-20 active:scale-95 transition-transform shadow-lg shadow-blue-900/20"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
           </button>
         </form>
       </div>
