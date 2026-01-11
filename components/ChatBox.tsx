@@ -9,7 +9,7 @@ interface ChatBoxProps {
   onSendMessage: (text: string) => void;
   title: string;
   isCommunity?: boolean;
-  onUserClick?: (userId: string) => void;
+  onUserClick?: (userId: string, username: string) => void;
   onReport?: (msgId: string) => void;
 }
 
@@ -50,9 +50,9 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
   return (
     <div className="flex flex-col h-full bg-slate-950 relative">
       
-      {/* Background Watermark - Positioned Lower for clarity */}
+      {/* Background Watermark - Ghost Talk branding */}
       <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-end pb-32 md:pb-48 opacity-[0.03] select-none z-0">
-        <h2 className="text-[12vw] font-black uppercase tracking-tighter leading-none mb-4">AnonChat</h2>
+        <h2 className="text-[12vw] font-black uppercase tracking-tighter leading-none mb-4">Ghost Talk</h2>
         <div className="text-center space-y-2">
           <p className="text-xl md:text-2xl font-black uppercase tracking-[0.5em]">Messages delete after 5m</p>
           <p className="text-lg md:text-xl font-black uppercase tracking-[0.3em]">Community resets every 30m</p>
@@ -87,7 +87,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
               {!isCompact && (
                 <div className={`flex items-center space-x-3 mb-2.5 px-1 ${isOwn ? 'flex-row-reverse space-x-reverse' : ''}`}>
                   <button 
-                    onClick={() => isCommunity && !isOwn && onUserClick?.(msg.senderId)}
+                    onClick={() => isCommunity && !isOwn && onUserClick?.(msg.senderId, msg.senderName)}
                     className={`text-[10px] font-black uppercase tracking-widest transition-colors ${isCommunity && !isOwn ? 'text-blue-400 hover:text-blue-300 underline decoration-blue-500/30 underline-offset-4' : 'text-slate-500'}`}
                   >
                     {msg.senderName}
@@ -104,26 +104,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
                 }`}
               >
                 <div className="whitespace-pre-wrap break-words">{msg.text}</div>
-                
-                {!isOwn && (
-                  <button 
-                    onClick={() => onReport?.(msg.id)}
-                    className="absolute -right-10 top-1/2 -translate-y-1/2 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity p-2 text-slate-700 hover:text-red-500 hidden md:block"
-                    title="Report Message"
-                  >
-                    🚩
-                  </button>
-                )}
               </div>
-
-              {!isOwn && !isCompact && (
-                <button 
-                  onClick={() => onReport?.(msg.id)}
-                  className="mt-2 text-[8px] font-black text-slate-800 uppercase tracking-[0.2em] md:hidden"
-                >
-                  Report Message
-                </button>
-              )}
             </div>
           );
         })}

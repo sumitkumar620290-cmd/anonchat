@@ -49,7 +49,12 @@ const App: React.FC = () => {
   }));
 
   const [isOpenToPrivate, setIsOpenToPrivate] = useState(false);
-  const [reportedMessageIds, setReportedMessageIds] = useState<Set<string>>(new Set());
+  const [reportedMessageIds] = useState<Set<string>>(new Set());
+  const [hiddenUserIds, setHiddenUserIds] = useState<Set<string>>(new Set());
+  const [sentRequestIds, setSentRequestIds] = useState<Set<string>>(new Set());
+  
+  // Profile Action Popup State
+  const [userPopup, setUserPopup] = useState<{ userId: string, username: string } | null>(null);
 
   const isOpenToPrivateRef = useRef(isOpenToPrivate);
   useEffect(() => {
@@ -58,7 +63,6 @@ const App: React.FC = () => {
   }, [isOpenToPrivate]);
 
   const [commTimerEnd, setCommTimerEnd] = useState<number>(Date.now() + 1800000);
-  const [siteTimerEnd, setSiteTimerEnd] = useState<number>(Date.now() + 7200000);
   const [timeLeftStr, setTimeLeftStr] = useState('00:00');
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -68,7 +72,6 @@ const App: React.FC = () => {
   const [onlineUsers, setOnlineUsers] = useState<Map<string, User>>(() => new Map());
 
   const [activeIncomingRequest, setActiveIncomingRequest] = useState<ChatRequest | null>(null);
-  const cooldowns = useRef<Map<string, number>>(new Map());
   const requestExpiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const socket = useMemo(() => new SocketService(currentUser), []);
@@ -87,9 +90,14 @@ const App: React.FC = () => {
       const mins = Math.floor(diff / 60000);
       const secs = Math.floor((diff % 60000) / 1000);
       setTimeLeftStr(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+      
+      // If timer hits zero locally, clear community messages
+      if (diff === 0 && activeRoomType === RoomType.COMMUNITY) {
+          setMessages(prev => prev.filter(m => m.roomId !== 'community'));
+      }
     }, 1000);
     return () => clearInterval(tick);
-  }, [commTimerEnd]);
+  }, [commTimerEnd, activeRoomType]);
 
   const handleSendMessage = (text: string) => {
     const msg: Message = {
@@ -111,12 +119,13 @@ const App: React.FC = () => {
 
   const sendRequest = (targetUser: User) => {
     if (targetUser.id === currentUser.id) return;
-    const cooldownEnd = cooldowns.current.get(targetUser.id);
-    if (cooldownEnd && Date.now() < cooldownEnd) {
-      alert(`Cooldown active for ${targetUser.username}.`);
+    if (sentRequestIds.has(targetUser.id)) return;
+    if (privateRooms.size > 0) {
+      alert("You can only have one active private chat.");
       return;
     }
     if (!targetUser.acceptingRequests || targetUser.isDeciding) return;
+    
     socket.emit({
       type: 'CHAT_REQUEST',
       request: {
@@ -127,11 +136,19 @@ const App: React.FC = () => {
         timestamp: Date.now()
       }
     });
-    cooldowns.current.set(targetUser.id, Date.now() + 180000);
+    
+    setSentRequestIds(prev => new Set(prev).add(targetUser.id));
     alert(`Private chat request sent to ${targetUser.username}!`);
+    setUserPopup(null);
   };
 
   const acceptRequest = (req: ChatRequest) => {
+    if (privateRooms.size > 0) {
+      alert("You already have an active private chat.");
+      setActiveIncomingRequest(null);
+      setCurrentUser(prev => ({ ...prev, isDeciding: false }));
+      return;
+    }
     if (requestExpiryTimer.current) clearTimeout(requestExpiryTimer.current);
     const room: PrivateRoom = {
       id: generateId(),
@@ -153,7 +170,6 @@ const App: React.FC = () => {
         return [...prev, ...newMessages];
       });
       setCommTimerEnd(data.communityTimerEnd);
-      setSiteTimerEnd(data.siteTimerEnd);
     });
 
     socket.on<HeartbeatPayload>('HEARTBEAT', (data) => {
@@ -182,7 +198,7 @@ const App: React.FC = () => {
     });
 
     socket.on<ChatRequestPayload>('CHAT_REQUEST', (data) => {
-      if (data.request.toId === currentUser.id && isOpenToPrivateRef.current) {
+      if (data.request.toId === currentUser.id && isOpenToPrivateRef.current && privateRooms.size === 0) {
         setCurrentUser(prev => {
           if (prev.isDeciding) return prev;
           setActiveIncomingRequest(data.request);
@@ -209,11 +225,15 @@ const App: React.FC = () => {
     });
 
     return () => socket.close();
-  }, [socket, currentUser.id]);
+  }, [socket, currentUser.id, privateRooms.size]);
 
   const activeMessages = useMemo(() => 
-    messages.filter(m => m.roomId === activeRoomId && !reportedMessageIds.has(m.id)), 
-    [messages, activeRoomId, reportedMessageIds]
+    messages.filter(m => 
+      m.roomId === activeRoomId && 
+      !reportedMessageIds.has(m.id) &&
+      !hiddenUserIds.has(m.senderId)
+    ), 
+    [messages, activeRoomId, reportedMessageIds, hiddenUserIds]
   );
 
   const [showReconnectModal, setShowReconnectModal] = useState(false);
@@ -267,7 +287,7 @@ const App: React.FC = () => {
   return (
     <div className="flex flex-col md:flex-row h-[100dvh] w-screen overflow-hidden bg-slate-950 text-slate-100 selection:bg-blue-500/30">
       
-      {/* 2. DESKTOP LEFT SIDEBAR (FIXED) */}
+      {/* DESKTOP LEFT SIDEBAR */}
       <aside className="hidden md:flex flex-col w-72 bg-slate-900 border-r border-white/5 shrink-0">
         <div className="p-8 flex flex-col h-full">
           <div className="mb-10">
@@ -275,7 +295,10 @@ const App: React.FC = () => {
               <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center font-black text-white shadow-lg">
                 {currentUser.username.charAt(5)}
               </div>
-              <p className="text-lg font-black tracking-tight">{currentUser.username}</p>
+              <div>
+                <p className="text-lg font-black tracking-tight leading-none">Ghost Talk</p>
+                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Temporary Conversations</p>
+              </div>
             </div>
             
             <div className="space-y-4">
@@ -283,11 +306,7 @@ const App: React.FC = () => {
               <ul className="text-xs text-slate-400 space-y-3 leading-relaxed">
                 <li className="flex items-start space-x-2">
                   <span className="text-blue-500 mt-0.5">•</span>
-                  <span>No login, completely anonymous.</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <span className="text-blue-500 mt-0.5">•</span>
-                  <span>Messages vanish after 5 mins.</span>
+                  <span>No login. Completely anonymous.</span>
                 </li>
                 <li className="flex items-start space-x-2">
                   <span className="text-blue-500 mt-0.5">•</span>
@@ -296,6 +315,14 @@ const App: React.FC = () => {
                 <li className="flex items-start space-x-2">
                   <span className="text-blue-500 mt-0.5">•</span>
                   <span>Private chat requires mutual consent.</span>
+                </li>
+                <li className="flex items-start space-x-2">
+                  <span className="text-blue-500 mt-0.5">•</span>
+                  <span>No spamming or illegal activity.</span>
+                </li>
+                <li className="flex items-start space-x-2">
+                  <span className="text-blue-500 mt-0.5">•</span>
+                  <span>Abuse may result in instant session removal.</span>
                 </li>
               </ul>
             </div>
@@ -326,80 +353,83 @@ const App: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0">
         
         {/* HEADER */}
-        <header className="z-50 h-16 md:h-18 bg-slate-900/95 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-4 md:px-8 shrink-0">
+        <header className="z-50 h-16 md:h-20 bg-slate-900/95 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-3 md:px-8 shrink-0">
           
-          {/* Left: Identity / Mobile Rules Toggle */}
-          <div className="flex items-center">
+          <div className="flex items-center min-w-0">
             <button 
               onClick={() => setShowMobileRules(true)}
               className="flex items-center space-x-2 md:hidden"
             >
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-xs font-black">
+              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-xs font-black shrink-0">
                 {currentUser.username.charAt(5)}
               </div>
-              <span className="text-xs font-bold truncate max-w-[60px]">{currentUser.username}</span>
+              <span className="text-[10px] font-black tracking-widest uppercase truncate max-w-[50px]">Ghost</span>
             </button>
             
             <div className="hidden md:flex items-center space-x-2 bg-slate-950/50 px-3 py-1.5 rounded-lg border border-white/5">
               <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Live Connection</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Live</span>
             </div>
           </div>
 
-          {/* Center: Large Private Chat Toggle */}
-          <div className="flex flex-col items-center">
+          {/* Center: BMC (mobile) + Private Chat Toggle */}
+          <div className="flex items-center space-x-1.5 md:space-x-3">
+            <a 
+              href={BMC_LINK} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="md:hidden p-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-full border border-amber-500/20 transition-all active:scale-95"
+              title="Support with a coffee"
+            >
+              <span className="text-xs">☕</span>
+            </a>
+            
             <button 
               onClick={() => setIsOpenToPrivate(!isOpenToPrivate)}
-              className={`flex items-center space-x-2 md:space-x-3 px-3 md:px-6 py-1.5 md:py-2.5 rounded-full border transition-all duration-300 ${
+              className={`flex items-center space-x-2 md:space-x-3 px-2.5 md:px-6 py-1.5 md:py-2.5 rounded-full border transition-all duration-300 ${
                 isOpenToPrivate 
-                  ? 'bg-blue-600/20 border-blue-500/50 text-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.2)]' 
-                  : 'bg-slate-800/80 border-white/10 text-slate-400 hover:bg-slate-800'
+                  ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(59,130,246,0.2)] border-blue-400' 
+                  : 'bg-slate-800 border-white/10 text-slate-400 hover:bg-slate-700'
               }`}
             >
-              <span className="text-sm md:text-lg">{isOpenToPrivate ? '🔓' : '🔒'}</span>
-              <div className="flex flex-col items-start leading-none text-left">
-                <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em]">Private Chat</span>
-                <span className="text-[8px] md:text-[9px] font-bold uppercase opacity-60">({isOpenToPrivate ? 'ON' : 'OFF'})</span>
-              </div>
+              <span className="text-[9px] md:text-xs font-black uppercase tracking-widest leading-none">Private Chat</span>
+              <span className="text-[8px] opacity-60 font-bold uppercase leading-none">{isOpenToPrivate ? 'ON' : 'OFF'}</span>
             </button>
           </div>
 
-          {/* Right: BMC & Timer */}
-          <div className="flex items-center space-x-3 md:space-x-5">
-            <div className="flex items-center space-x-2">
-              <div className="hidden xs:flex flex-col items-end mr-1">
-                <span className="text-[8px] text-slate-500 font-black uppercase tracking-tighter">Community Reset</span>
-                <span className="text-xs md:text-base font-mono font-black text-blue-400">{timeLeftStr}</span>
+          {/* Right: Global Timer & Peers */}
+          <div className="flex items-center space-x-1.5 md:space-x-4">
+            {/* GLOBAL RESET TIMER BOX - PC, Phone, Tablet */}
+            <div className="flex items-center bg-blue-600/10 border border-blue-500/20 rounded-lg overflow-hidden h-8 md:h-10">
+              <div className="bg-blue-600 px-1.5 md:px-3 h-full flex items-center">
+                <span className="text-[8px] md:text-[10px] font-black uppercase text-white tracking-tighter leading-none">Global</span>
               </div>
-              <a 
-                href={BMC_LINK} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="p-2 md:p-2.5 bg-slate-800 hover:bg-amber-500 text-amber-500 hover:text-white rounded-xl transition-all border border-white/5 active:scale-90"
-                title="Buy Me a Coffee"
-              >
-                <span className="text-lg md:text-xl">☕</span>
-              </a>
-              <button 
-                onClick={() => setShowPeers(!showPeers)}
-                className="p-2 md:p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors border border-white/5"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              </button>
+              <div className="px-2 md:px-3 h-full flex items-center min-w-[44px] md:min-w-[64px] justify-center">
+                <span className="text-[10px] md:text-sm font-mono font-black text-blue-400 leading-none tabular-nums glow-blue">{timeLeftStr}</span>
+              </div>
             </div>
+            
+            <button 
+              onClick={() => setShowPeers(!showPeers)}
+              className="p-2 md:p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors border border-white/5 relative"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 md:h-5 md:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              {onlineUsers.size > 1 && (
+                <span className="absolute -top-1 -right-1 bg-blue-600 text-[8px] font-black w-3.5 h-3.5 md:w-4 md:h-4 rounded-full flex items-center justify-center border-2 border-slate-900">
+                  {onlineUsers.size - 1}
+                </span>
+              )}
+            </button>
           </div>
         </header>
 
         <main className="flex-1 flex overflow-hidden relative">
-          
-          {/* Main Chat Feed Area */}
           <div className="flex-1 flex flex-col relative bg-slate-950">
-            
-            {/* Room Indicator Overlay */}
+            {/* Room Indicator */}
             <div className="absolute top-4 left-0 right-0 z-30 flex justify-center pointer-events-none">
-              <div className="flex bg-slate-900/40 backdrop-blur-md p-1 rounded-2xl border border-white/5 shadow-2xl pointer-events-auto">
+              <div className="flex bg-slate-900/60 backdrop-blur-xl p-1 rounded-2xl border border-white/10 shadow-2xl pointer-events-auto">
                 <button 
                   onClick={() => { setActiveRoomId('community'); setActiveRoomType(RoomType.COMMUNITY); }}
                   className={`px-4 md:px-6 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${
@@ -408,7 +438,7 @@ const App: React.FC = () => {
                       : 'text-slate-500 hover:text-slate-300'
                   }`}
                 >
-                  Community
+                  Global
                 </button>
                 {Array.from<PrivateRoom>(privateRooms.values()).map(room => (
                   <button 
@@ -420,17 +450,16 @@ const App: React.FC = () => {
                         : 'text-slate-500 hover:text-slate-300'
                     }`}
                   >
-                    Secret DM
+                    Secret Chat
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* High-Fidelity Notification for Private Chat Requests */}
+            {/* Notification */}
             {activeIncomingRequest && (
               <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-2rem)] max-w-sm md:max-w-md animate-in slide-in-from-top-10 fade-in duration-500">
                 <div className="bg-white/95 backdrop-blur-xl rounded-[2.5rem] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.7)] p-5 flex items-center justify-between border border-white/20 overflow-hidden relative">
-                  {/* Timer Progress Bar */}
                   <div className="absolute top-0 left-0 h-1.5 bg-blue-100/50 w-full"></div>
                   <div className="absolute top-0 left-0 h-1.5 bg-blue-600 animate-[timer_30s_linear_forwards]"></div>
                   
@@ -444,7 +473,7 @@ const App: React.FC = () => {
                         {activeIncomingRequest.fromName}
                       </p>
                       <p className="text-slate-500 text-[9px] font-bold uppercase tracking-[0.2em] mt-1 leading-none">
-                        Private Request
+                        Wants Private Chat
                       </p>
                     </div>
                   </div>
@@ -467,27 +496,56 @@ const App: React.FC = () => {
               </div>
             )}
 
+            {/* Profile Action Popup */}
+            {userPopup && (
+              <div className="fixed inset-0 z-[80] flex items-center justify-center p-6 md:absolute md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2">
+                <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm md:hidden" onClick={() => setUserPopup(null)}></div>
+                <div className="relative bg-slate-900 border border-white/10 p-6 md:p-8 rounded-[2rem] w-full max-w-xs shadow-2xl animate-in zoom-in-95 duration-200">
+                  <h4 className="text-center font-black text-xl mb-6 truncate">{userPopup.username}</h4>
+                  <div className="space-y-3">
+                    <button 
+                      disabled={sentRequestIds.has(userPopup.userId) || privateRooms.size > 0}
+                      onClick={() => {
+                        const target = onlineUsers.get(userPopup.userId);
+                        if (target) sendRequest(target);
+                      }}
+                      className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-20 disabled:cursor-not-allowed text-white font-black rounded-2xl text-xs uppercase tracking-widest transition-all active:scale-95"
+                    >
+                      {sentRequestIds.has(userPopup.userId) ? 'Request Sent' : 'Start Private Chat'}
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setHiddenUserIds(prev => new Set(prev).add(userPopup.userId));
+                        setUserPopup(null);
+                      }}
+                      className="w-full py-4 bg-slate-800 hover:bg-red-900/20 hover:text-red-400 text-slate-400 font-bold rounded-2xl text-[10px] uppercase tracking-widest transition-all"
+                    >
+                      Report User
+                    </button>
+                    <button 
+                      onClick={() => setUserPopup(null)}
+                      className="w-full py-3 text-slate-600 font-bold uppercase text-[9px] tracking-widest"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex-1 min-h-0 pt-20 md:pt-0">
               <ChatBox 
                 messages={activeMessages} 
                 currentUser={currentUser} 
                 onSendMessage={handleSendMessage}
-                title={activeRoomType === RoomType.COMMUNITY ? 'Global Chat' : 'Secret DM'}
+                title={activeRoomType === RoomType.COMMUNITY ? 'Global' : 'Secret'}
                 isCommunity={activeRoomType === RoomType.COMMUNITY}
-                onUserClick={(userId) => {
-                  const u = onlineUsers.get(userId);
-                  if (u && u.acceptingRequests) {
-                    if (confirm(`Send Private Chat Request to ${u.username}?`)) {
-                      sendRequest(u);
-                    }
-                  }
-                }}
-                onReport={(msgId) => setReportedMessageIds(prev => new Set(prev).add(msgId))}
+                onUserClick={(userId, username) => setUserPopup({ userId, username })}
               />
             </div>
           </div>
 
-          {/* PEERS SIDEBAR (Slide-in) */}
+          {/* PEERS SIDEBAR */}
           <aside className={`
             fixed inset-y-0 right-0 z-[70] w-64 md:w-72 bg-slate-900 border-l border-white/5 transform transition-transform duration-500 ease-in-out
             ${showPeers ? 'translate-x-0 shadow-2xl' : 'translate-x-full'}
@@ -500,27 +558,24 @@ const App: React.FC = () => {
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2">
-                {Array.from<User>(onlineUsers.values()).filter(u => u.id !== currentUser.id).map(u => (
-                  <div key={u.id} className="p-3 bg-white/[0.03] border border-white/[0.05] rounded-2xl flex items-center justify-between group transition-all hover:bg-white/[0.06]">
+                {Array.from<User>(onlineUsers.values())
+                  .filter(u => u.id !== currentUser.id && !hiddenUserIds.has(u.id))
+                  .map(u => (
+                  <button 
+                    key={u.id} 
+                    onClick={() => setUserPopup({ userId: u.id, username: u.username })}
+                    className="w-full text-left p-4 bg-white/[0.03] border border-white/[0.05] rounded-2xl flex items-center justify-between group transition-all hover:bg-white/[0.06]"
+                  >
                     <div className="min-w-0">
                       <p className="text-xs font-black truncate">{u.username}</p>
                       <div className="flex items-center space-x-1.5 mt-1">
                          <div className={`w-1 h-1 rounded-full ${u.acceptingRequests ? 'bg-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.6)]' : 'bg-slate-600'}`}></div>
-                         <span className="text-[9px] font-bold text-slate-500 uppercase">
-                           {u.isDeciding ? 'Busy' : (u.acceptingRequests ? 'Accepting Requests' : 'DM Locked')}
+                         <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">
+                           {u.isDeciding ? 'Busy' : (u.acceptingRequests ? 'Unlocked' : 'Locked')}
                          </span>
                       </div>
                     </div>
-                    {u.acceptingRequests && !u.isDeciding && (
-                      <button 
-                        onClick={() => sendRequest(u)}
-                        className="bg-blue-600 p-2 rounded-xl text-white shadow-lg active:scale-90 transition-transform"
-                        title="Send Request"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                      </button>
-                    )}
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -538,22 +593,33 @@ const App: React.FC = () => {
                 {currentUser.username.charAt(5)}
               </div>
               <div>
-                <h3 className="text-xl font-black uppercase tracking-tight">{currentUser.username}</h3>
-                <p className="text-green-500 text-[10px] font-bold uppercase tracking-widest">Active Session</p>
+                <h3 className="text-xl font-black uppercase tracking-tight">Ghost Talk</h3>
+                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-0.5">Session: {currentUser.username}</p>
               </div>
             </div>
             <div className="space-y-4 mb-10">
               <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Guidelines</h4>
               <ul className="text-sm text-slate-400 space-y-3 leading-relaxed">
-                <li>• No login, no persistent identity.</li>
-                <li>• Community messages auto-delete every 5 mins.</li>
-                <li>• Private chat needs mutual consent.</li>
-                <li>• This is an 18+ space.</li>
+                <li>• No login. Completely anonymous.</li>
+                <li>• Be respectful to other ghosts.</li>
+                <li>• Private chat requires mutual consent.</li>
+                <li>• No spamming or illegal activity.</li>
+                <li>• Abuse may result in instant session removal.</li>
               </ul>
             </div>
             <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => {
+                  setShowMobileRules(false);
+                  setShowReconnectModal(true);
+                }}
+                className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white font-black rounded-2xl text-center uppercase tracking-widest flex items-center justify-center space-x-2 border border-white/5"
+              >
+                <span>🔑</span>
+                <span>Rejoin Session</span>
+              </button>
               <a href={BMC_LINK} target="_blank" rel="noopener noreferrer" className="w-full py-4 bg-amber-500 text-white font-black rounded-2xl text-center uppercase tracking-widest">Support with ☕</a>
-              <button onClick={() => setShowMobileRules(false)} className="w-full py-4 bg-slate-800 text-slate-400 font-bold rounded-2xl">Close</button>
+              <button onClick={() => setShowMobileRules(false)} className="w-full py-4 bg-slate-800/50 text-slate-500 font-bold rounded-2xl">Close</button>
             </div>
           </div>
         </div>
@@ -598,6 +664,7 @@ const App: React.FC = () => {
 
       <style>{`
         @keyframes timer { from { width: 100%; } to { width: 0%; } }
+        .glow-blue { text-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
       `}</style>
     </div>
   );
