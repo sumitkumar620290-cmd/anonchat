@@ -44,7 +44,7 @@ const App: React.FC = () => {
   const [showExtendPopup, setShowExtendPopup] = useState<string | null>(null);
   const [showContactNotice, setShowContactNotice] = useState<string | null>(null);
   const [sessionTopic, setSessionTopic] = useState<string>('');
-  const [currentStarterPrompt, setCurrentStarterPrompt] = useState<string>('');
+  const [currentStarterPrompt, setCurrentStarterPrompt] = useState<string>(() => getWelcomePrompt());
   
   // Track room IDs that already showed contact notice
   const shownContactNotice = useRef<Set<string>>(new Set());
@@ -282,7 +282,7 @@ const App: React.FC = () => {
       if (data.topic) setSessionTopic(data.topic);
       if (data.nextReset) setCommTimerEnd(data.nextReset);
       setMessages(prev => prev.filter(m => m.roomId !== 'community'));
-      // Feature: Reset starter prompt for new session
+      // Reset starter prompt for new community session
       setCurrentStarterPrompt(getWelcomePrompt());
     });
 
@@ -301,11 +301,6 @@ const App: React.FC = () => {
           return next;
         });
       }
-
-      // Feature: Persistent starter prompt (sticky) instead of temporary system message
-      if (!currentStarterPrompt) {
-        setCurrentStarterPrompt(getWelcomePrompt());
-      }
     });
 
     const unsubError = socket.on<ErrorPayload>('ERROR', (data) => {
@@ -323,7 +318,7 @@ const App: React.FC = () => {
     return () => {
       unsubHB(); unsubMsg(); unsubReq(); unsubAccept(); unsubExtended(); unsubClosed(); unsubInit(); unsubError(); unsubResetComm();
     };
-  }, [socket, activeRoomId, currentStarterPrompt]);
+  }, [socket, activeRoomId]);
 
   const activeMessages = useMemo(() => 
     messages.filter(m => m.roomId === activeRoomId && !hiddenUserIds.has(m.senderId)), 

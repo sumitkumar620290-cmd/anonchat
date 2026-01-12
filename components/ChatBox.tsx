@@ -111,7 +111,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
       <div 
         ref={scrollRef} 
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-3 md:px-6 pt-16 pb-4 md:pt-20 md:pb-6 space-y-1 custom-scrollbar z-10 overscroll-contain touch-pan-y"
+        className="flex-1 overflow-y-auto px-3 md:px-6 pt-24 pb-4 md:pt-32 md:pb-6 space-y-1 custom-scrollbar z-10 overscroll-contain touch-pan-y"
       >
         {visibleMessages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center space-y-4 opacity-30 select-none text-center">
