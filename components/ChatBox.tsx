@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Message, User } from '../types';
+import { Message, User, RoomType } from '../types';
 import { formatTime } from '../utils/helpers';
 
 interface ChatBoxProps {
@@ -8,12 +8,12 @@ interface ChatBoxProps {
   currentUser: User;
   onSendMessage: (text: string) => void;
   title: string;
-  isCommunity?: boolean;
+  roomType: RoomType;
   onUserClick?: (userId: string, username: string) => void;
   onReport?: (msgId: string) => void;
 }
 
-const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage, onUserClick }) => {
+const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage, onUserClick, roomType }) => {
   const [inputText, setInputText] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const isAtBottom = useRef(true);
@@ -26,7 +26,8 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
     return () => clearInterval(ticker);
   }, []);
 
-  const visibleMessages = messages.filter(m => now - m.timestamp < 300000);
+  // Task 4: Private chat messages do NOT disappear every 5 minutes.
+  const visibleMessages = messages.filter(m => roomType === RoomType.PRIVATE ? true : now - m.timestamp < 300000);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
     if (scrollRef.current) {
@@ -100,11 +101,23 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
         .message-disperse { animation: disperse 1s cubic-bezier(0.4, 0, 0.2, 1) forwards; pointer-events: none; }
       `}</style>
       
+      {/* Task 5: Private Chat Watermark Update */}
       <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center opacity-[0.12] select-none z-0">
         <h2 className="text-3xl md:text-4xl font-black uppercase tracking-tighter leading-none text-slate-100">Ghost Talk</h2>
-        <div className="flex flex-col items-center mt-2 text-center">
-          <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-[0.4em] text-slate-300">Chats fade after five minutes</p>
-          <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-[0.4em] mt-1 text-slate-300">global resets after every 30 minutes</p>
+        <div className="flex flex-col items-center mt-2 text-center max-w-[80%]">
+          {roomType === RoomType.PRIVATE ? (
+            <>
+              <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-[0.4em] text-slate-300">PRIVATE CHAT</p>
+              <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-[0.4em] mt-1 text-slate-300">Messages exist only during this private session</p>
+              <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-[0.4em] mt-1 text-slate-300">Maximum private chat duration: 1 hour</p>
+              <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-[0.4em] mt-1 text-slate-300">No memory. No records.</p>
+            </>
+          ) : (
+            <>
+              <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-[0.4em] text-slate-300">Chats fade after five minutes</p>
+              <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-[0.4em] mt-1 text-slate-300">global resets after every 30 minutes</p>
+            </>
+          )}
         </div>
       </div>
 
@@ -128,7 +141,8 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
           const prevMsg = visibleMessages[idx - 1];
           const isCompact = prevMsg && prevMsg.senderId === msg.senderId && (msg.timestamp - prevMsg.timestamp < 60000);
           const age = now - msg.timestamp;
-          const isExpiring = age >= 299000;
+          // Only community messages disperse
+          const isExpiring = roomType === RoomType.COMMUNITY && age >= 299000;
 
           return (
             <div 

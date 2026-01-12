@@ -41,11 +41,13 @@ const App: React.FC = () => {
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
   const [showPeersMenu, setShowPeersMenu] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const [showExtendPopup, setShowExtendPopup] = useState<string | null>(null);
+  const [showExtendPopup, setShowExtendPopup] = useState<{ roomId: string, stage: '5min' | '2min' } | null>(null);
   const [showContactNotice, setShowContactNotice] = useState<string | null>(null);
   const [sessionTopic, setSessionTopic] = useState<string>('');
   const [currentStarterPrompt, setCurrentStarterPrompt] = useState<string>(() => getWelcomePrompt());
   
+  // Track room IDs and stages that already showed extension prompt
+  const promptedStages = useRef<Map<string, Set<string>>>(new Map());
   // Track room IDs that already showed contact notice
   const shownContactNotice = useRef<Set<string>>(new Set());
   
@@ -119,10 +121,22 @@ const App: React.FC = () => {
           shownContactNotice.current.add(room.id);
         }
 
-        // Extension Popup Check
-        if (remaining > 0 && remaining <= 300000 && !room.extended && showExtendPopup !== room.id) {
-          setShowExtendPopup(room.id);
-        } else if (remaining <= 0) {
+        // Extension Popup Check - NEW Mutual Consent Logic
+        if (!room.extended && remaining > 0) {
+          const stages = promptedStages.current.get(room.id) || new Set();
+          
+          if (remaining <= 300000 && remaining > 120000 && !stages.has('5min')) {
+            setShowExtendPopup({ roomId: room.id, stage: '5min' });
+            stages.add('5min');
+            promptedStages.current.set(room.id, stages);
+          } else if (remaining <= 120000 && !stages.has('2min')) {
+            setShowExtendPopup({ roomId: room.id, stage: '2min' });
+            stages.add('2min');
+            promptedStages.current.set(room.id, stages);
+          }
+        }
+
+        if (remaining <= 0) {
           setPrivateRooms(prev => {
             const next = new Map(prev);
             next.delete(room.id);
@@ -136,7 +150,7 @@ const App: React.FC = () => {
       });
     }, 1000);
     return () => clearInterval(tick);
-  }, [activeRoomId, privateRooms, showExtendPopup]);
+  }, [activeRoomId, privateRooms]);
 
   const timeLeftGlobal = useMemo(() => {
     const diff = Math.max(0, commTimerEnd - currentTime);
@@ -194,8 +208,14 @@ const App: React.FC = () => {
     socket.emit({ type: 'CHAT_EXIT', roomId });
   };
 
-  const extendPrivateRoom = (roomId: string) => {
-    socket.emit({ type: 'CHAT_EXTEND', roomId });
+  const handleExtensionDecision = (roomId: string, stage: '5min' | '2min', decision: 'EXTEND' | 'LATER' | 'END') => {
+    socket.emit({ 
+      type: 'CHAT_EXTENSION_DECISION', 
+      roomId, 
+      stage, 
+      decision, 
+      userId: currentUser.id 
+    });
     setShowExtendPopup(null);
   };
 
@@ -371,39 +391,44 @@ const App: React.FC = () => {
         {activePrivateRoom && (
           <>
             <div>
-              <h4 className="text-[9px] font-black uppercase text-indigo-500 tracking-widest mb-3">Private Session</h4>
-              <div className="bg-indigo-900/20 p-3 rounded-lg border border-indigo-500/20">
-                <p className="text-[9px] text-indigo-400 uppercase font-black mb-0.5">Secret Restore Key</p>
-                <p className="text-xs font-mono font-bold text-white tracking-widest">{activePrivateRoom.reconnectCode}</p>
-              </div>
-            </div>
-            <div>
-              <h4 className="text-[9px] font-black uppercase text-indigo-500 tracking-widest mb-2">Private Guidelines</h4>
+              <h4 className="text-[9px] font-black uppercase text-indigo-500 tracking-widest mb-3">PRIVATE CHAT GUIDELINES</h4>
               <ul className="text-[10px] text-slate-400 space-y-2 font-medium">
-                <li>• Mutual consent required</li>
-                <li>• Session lasts 30 minutes</li>
-                <li>• One 30min extension allowed</li>
-                <li>• Exit ends chat for both</li>
-                <li>• No history is saved</li>
+                <li>• Private chat starts only with mutual consent.</li>
+                <li>• Each private chat lasts 30 minutes.</li>
+                <li>• One optional extension of 30 minutes may be offered if both users agree.</li>
+                <li>• Maximum private chat duration is 1 hour.</li>
+                <li>• If a user disconnects, the other user has 15 minutes to rejoin the same session.</li>
+                <li>• If either user exits, the private chat ends immediately for both users.</li>
+                <li>• Respect boundaries at all times.</li>
+                <li>• No pressure, manipulation, or coercion.</li>
+                <li>• Any illegal activity immediately ends the private chat.</li>
+                <li>• Ghost Talk does not store messages or shared contact details.</li>
               </ul>
             </div>
           </>
         )}
 
         <div>
-          <h4 className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-2">Global Guidelines</h4>
+          <h4 className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-2">GLOBAL / COMMUNITY GUIDELINES</h4>
           <ul className="text-[10px] text-slate-400 space-y-2 font-medium">
-            <li>• No login. Fully anonymous</li>
-            <li>• Be respectful to others</li>
-            <li>• Messages delete after 5m</li>
-            <li>• No spamming or flooding</li>
-            <li>• No illegal or harmful content</li>
+            <li>• No login. Fully anonymous.</li>
+            <li>• Be respectful to other ghosts.</li>
+            <li>• No spamming or flooding messages.</li>
+            <li>• No harassment, threats, or intimidation.</li>
+            <li>• No illegal or harmful activities of any kind.</li>
+            <li>• Do not share personal or identifiable information publicly.</li>
+            <li>• Conversations must remain consensual and lawful.</li>
+            <li>• Community safety comes first.</li>
           </ul>
         </div>
 
         <div className="bg-red-950/20 border border-red-500/20 p-3 rounded-lg mb-4">
           <h4 className="text-[9px] font-black uppercase text-red-500 tracking-widest mb-2">18+ NOTICE</h4>
-          <p className="text-[10px] text-red-400/80 font-medium">For 18+ only. Illegal activity is prohibited.</p>
+          <p className="text-[10px] text-red-400/80 font-medium leading-relaxed">
+            For adults only.<br/>
+            Consensual adult conversations are allowed.<br/>
+            Illegal activity, exploitation, or harm is strictly prohibited.
+          </p>
         </div>
       </div>
 
@@ -517,7 +542,7 @@ const App: React.FC = () => {
 
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden h-full">
               {isFinalFive && <div className="z-20 bg-indigo-500/20 text-indigo-300 px-3 py-1 text-[8px] font-black uppercase text-center border-b border-white/5">Session fading soon...</div>}
-              <ChatBox messages={activeMessages} currentUser={currentUser} onSendMessage={handleSendMessage} title={activeRoomType === RoomType.COMMUNITY ? 'Global' : 'Secret'} onUserClick={(userId, username) => setUserPopup({ userId, username })} />
+              <ChatBox messages={activeMessages} currentUser={currentUser} onSendMessage={handleSendMessage} title={activeRoomType === RoomType.COMMUNITY ? 'Global' : 'Secret'} roomType={activeRoomType} onUserClick={(userId, username) => setUserPopup({ userId, username })} />
             </div>
 
             {userPopup && (
@@ -579,11 +604,24 @@ const App: React.FC = () => {
               <span className="text-2xl">⏳</span>
             </div>
             <h3 className="text-lg font-black text-white uppercase mb-4 tracking-tight">Time Fading</h3>
-            <p className="text-slate-400 text-xs font-medium leading-relaxed mb-8">This session expires in 5 minutes. Would you like to extend for 30 more?</p>
-            <div className="space-y-3">
-              <button onClick={() => extendPrivateRoom(showExtendPopup!)} className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-blue-900/20">Extend Session</button>
-              <button onClick={() => setShowExtendPopup(null)} className="w-full py-3 text-slate-500 font-bold uppercase text-[9px] tracking-widest">Maybe Later</button>
-            </div>
+            
+            {showExtendPopup.stage === '5min' ? (
+              <>
+                <p className="text-slate-400 text-xs font-medium leading-relaxed mb-8">This session expires in 5 minutes. Would you like to extend for 30 more?</p>
+                <div className="space-y-3">
+                  <button onClick={() => handleExtensionDecision(showExtendPopup.roomId, '5min', 'EXTEND')} className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-blue-900/20">Extend 30 minutes</button>
+                  <button onClick={() => handleExtensionDecision(showExtendPopup.roomId, '5min', 'LATER')} className="w-full py-3 text-slate-500 font-bold uppercase text-[9px] tracking-widest">Maybe Later</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-slate-400 text-xs font-medium leading-relaxed mb-8">Final Chance: Session expires in 2 minutes. Extend or end chat?</p>
+                <div className="space-y-3">
+                  <button onClick={() => handleExtensionDecision(showExtendPopup.roomId, '2min', 'EXTEND')} className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-blue-900/20">Extend 30 minutes</button>
+                  <button onClick={() => handleExtensionDecision(showExtendPopup.roomId, '2min', 'END')} className="w-full py-3 text-red-500/70 font-bold uppercase text-[9px] tracking-widest">End Chat</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

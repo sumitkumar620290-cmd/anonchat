@@ -221,8 +221,12 @@ io.on('connection', (socket) => {
   });
 
   socket.on('CHAT_ACCEPT', (data) => {
-    privateRooms.set(data.room.id, data.room);
-    io.emit('CHAT_ACCEPT', data);
+    const room = {
+        ...data.room,
+        stageDecisions: { '5min': {}, '2min': {} }
+    };
+    privateRooms.set(room.id, room);
+    io.emit('CHAT_ACCEPT', { ...data, room });
   });
 
   socket.on('CHAT_EXIT', (data) => {
@@ -232,13 +236,51 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('CHAT_EXTEND', (data) => {
-    const room = privateRooms.get(data.roomId);
-    if (room && !room.extended) {
-      room.extended = true;
-      room.expiresAt = Date.now() + 30 * 60 * 1000;
-      privateRooms.set(room.id, room);
-      io.emit('CHAT_EXTENDED', { room });
+  socket.on('CHAT_EXTENSION_DECISION', (data) => {
+    const { roomId, stage, decision, userId } = data;
+    const room = privateRooms.get(roomId);
+    if (!room || room.extended) return;
+
+    if (!room.stageDecisions) room.stageDecisions = { '5min': {}, '2min': {} };
+    if (!room.stageDecisions[stage]) room.stageDecisions[stage] = {};
+    
+    room.stageDecisions[stage][userId] = decision;
+
+    // We only process if we have both decisions
+    const decisions = Object.values(room.stageDecisions[stage]);
+    if (decisions.length >= 2) {
+      if (decisions.every(d => d === 'EXTEND')) {
+        room.extended = true;
+        room.expiresAt = Date.now() + 30 * 60 * 1000;
+        privateRooms.set(room.id, room);
+        io.emit('CHAT_EXTENDED', { room });
+        
+        const sysMsg = {
+          id: 'sys_ext_' + Math.random().toString(36).substring(7),
+          senderId: 'system',
+          senderName: 'SYSTEM',
+          text: 'Both users agreed. Session extended by 30 minutes.',
+          timestamp: Date.now(),
+          roomId: room.id
+        };
+        io.emit('MESSAGE', { message: sysMsg });
+      } else {
+        // Find if someone said 'LATER' or 'END'
+        const declined = decisions.find(d => d === 'LATER' || d === 'END');
+        let text = 'Extension declined.';
+        if (declined === 'LATER') text = 'The other person chose to decide later.';
+        if (declined === 'END') text = 'One user chose to end the chat when the timer expires.';
+
+        const sysMsg = {
+          id: 'sys_ext_no_' + Math.random().toString(36).substring(7),
+          senderId: 'system',
+          senderName: 'SYSTEM',
+          text,
+          timestamp: Date.now(),
+          roomId: room.id
+        };
+        io.emit('MESSAGE', { message: sysMsg });
+      }
     }
   });
 
