@@ -195,7 +195,6 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
           const prevMsg = visibleMessages[idx - 1];
           const isCompact = prevMsg && prevMsg.senderId === msg.senderId && (msg.timestamp - prevMsg.timestamp < 60000);
           const age = now - msg.timestamp;
-          // Task 1: Start dissolve effect slightly before actual removal (300s limit)
           const isExpiring = roomType === RoomType.COMMUNITY && age >= 298500;
           
           const isBeingSwiped = activeSwipeId === msg.id;
@@ -221,15 +220,14 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
               )}
               
               <div className={`relative flex items-center w-full ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-                {/* Swipe Indicator - Fixed vertical centering */}
                 <div className={`absolute left-0 top-1/2 flex items-center transition-all duration-200 ${isBeingSwiped ? 'opacity-100' : 'opacity-0'}`} style={{ transform: `translateY(-50%) translateX(${Math.min(currentOffset / 2, 30)}px)` }}>
-                    <div className={`p-1.5 rounded-full transition-colors ${isOverThreshold ? 'bg-blue-600 text-white scale-110' : 'bg-slate-800 text-slate-500'}`}>
+                    <div className={`p-1.5 rounded-full transition-colors ${isOverThreshold ? 'bg-blue-600 text-white scale-110' : 'bg-slate-900 text-slate-500'}`}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                     </div>
                 </div>
 
                 <div 
-                  className={`relative max-w-[92%] md:max-w-[80%] py-1.5 px-3.5 rounded-xl md:rounded-2xl text-[13px] md:text-sm leading-snug shadow-sm ${!swipeStartRef.current ? 'swipe-transition' : ''} ${isOwn ? 'bg-blue-600 text-white rounded-tr-none' : (msg.senderId === 'system' ? 'bg-slate-800/50 text-slate-400 border border-white/5 rounded-lg' : 'bg-slate-900 text-slate-200 rounded-tl-none')}`}
+                  className={`relative max-w-[92%] md:max-w-[80%] py-1.5 px-3.5 rounded-xl md:rounded-2xl text-[13px] md:text-sm leading-snug shadow-sm ${!swipeStartRef.current ? 'swipe-transition' : ''} ${isOwn ? 'bg-blue-600 text-white rounded-tr-none' : (msg.senderId === 'system' ? 'bg-slate-900/50 text-slate-400 border border-white/5 rounded-lg' : 'bg-slate-900 text-slate-200 rounded-tl-none')}`}
                   style={{ transform: `translateX(${currentOffset}px)` }}
                 >
                   {msg.replyTo && (
@@ -244,7 +242,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
                 {msg.senderId !== 'system' && (
                   <button 
                     onClick={() => handleReplyClick(msg)}
-                    className="hidden md:flex mx-2 p-1.5 rounded-full bg-slate-800 text-slate-400 opacity-0 group-hover:opacity-100 transition-all hover:text-blue-400 active:scale-90"
+                    className="hidden md:flex mx-2 p-1.5 rounded-full bg-slate-900 text-slate-400 opacity-0 group-hover:opacity-100 transition-all hover:text-blue-400 active:scale-90"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                   </button>
@@ -259,7 +257,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
       {showScrollButton && (
         <button 
           onClick={() => scrollToBottom('smooth')}
-          className="absolute bottom-20 left-1/2 -translate-x-1/2 z-[30] px-4 py-2 bg-slate-900/90 text-blue-400 border border-blue-500/20 text-[9px] font-black uppercase tracking-widest rounded-full shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 transition-all active:scale-95"
+          className="absolute bottom-20 left-1/2 -translate-x-1/2 z-[30] px-4 py-2 bg-slate-900/90 text-blue-400 border border-blue-500/10 text-[9px] font-black uppercase tracking-widest rounded-full shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 transition-all active:scale-95"
         >
           ↓ New messages
         </button>
@@ -270,9 +268,9 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
           <div className="max-w-3xl mx-auto mb-2 flex items-center justify-between bg-slate-950/50 p-2 rounded-xl border border-white/5 animate-in slide-in-from-bottom-1">
             <div className="flex-1 min-w-0 pr-4">
               <p className="text-[10px] font-black uppercase text-blue-500 mb-0.5">Replying to {replyingTo.senderName}</p>
-              <p className="text-[11px] text-slate-500 truncate italic">{replyingTo.text}</p>
+              <p className="text-[11px] text-slate-400 truncate italic">{replyingTo.text}</p>
             </div>
-            <button onClick={() => setReplyingTo(null)} className="text-slate-600 hover:text-white transition-colors p-1 active:scale-90">
+            <button onClick={() => setReplyingTo(null)} className="text-slate-500 hover:text-white transition-colors p-1 active:scale-90">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
@@ -285,14 +283,14 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, currentUser, onSendMessage,
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
             placeholder="Ghost a message..."
             rows={1}
-            className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:ring-1 focus:ring-blue-500/50 text-slate-100 placeholder-slate-700 resize-none transition-all"
+            className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:ring-1 focus:ring-blue-500/50 text-slate-100 placeholder-slate-800 resize-none transition-all"
             style={{ maxHeight: '120px' }}
           />
           <button 
             type="submit" 
             disabled={!inputText.trim()} 
             onPointerDown={(e) => e.preventDefault()}
-            className="bg-blue-600 w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-blue-900/20 active:scale-95 transition-transform disabled:opacity-50 disabled:grayscale"
+            className="bg-blue-600 w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-blue-950/20 active:scale-95 transition-transform disabled:opacity-50 disabled:grayscale"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
           </button>

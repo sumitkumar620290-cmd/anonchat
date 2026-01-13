@@ -111,22 +111,17 @@ const App: React.FC = () => {
     return () => clearInterval(hb);
   }, [socket, currentUser, isOpenToPrivate]);
 
-  // Task 2: Absolute Timer Comparison Logic
-  // Fix: Added useCallback to the import list from React.
   const checkTimers = useCallback(() => {
     const now = Date.now();
     
-    // Check Community Expiry
     if (now >= commTimerEnd) {
       setMessages(prev => prev.filter(m => m.roomId !== 'community'));
-      // Brief lockout to allow state to settle
       setIsInputDisabled(true);
       setTimeout(() => setIsInputDisabled(false), 2000);
     }
 
-    // Check Site/Global Expiry
     if (now >= siteTimerEnd) {
-      window.location.reload(); // Force full clean reset for total site expiry
+      window.location.reload();
     }
   }, [commTimerEnd, siteTimerEnd]);
 
@@ -185,7 +180,6 @@ const App: React.FC = () => {
       });
     }, 1000);
 
-    // Listeners for mobile browser throttling
     window.addEventListener('focus', checkTimers);
     document.addEventListener('visibilitychange', checkTimers);
 
@@ -217,7 +211,6 @@ const App: React.FC = () => {
       replyTo
     };
 
-    // Task 3: Anti-Spam Protection
     const recentHistory = spamState.current.history.filter(h => now - h.time < 60000);
     const lastSecCount = recentHistory.filter(h => now - h.time < 1000).length;
     const sameContentCount = recentHistory.filter(h => h.text === text).length;
@@ -227,11 +220,9 @@ const App: React.FC = () => {
       isSpam = true;
     }
 
-    // Always show locally for the sender
     setMessages(prev => [...prev, msg].slice(-300));
 
     if (isSpam) {
-      // Layer 3: Gentle system warning (once)
       if (!spamState.current.hasWarned && activeRoomId === 'community') {
         setTimeout(() => {
           const sysMsg: Message = {
@@ -246,12 +237,10 @@ const App: React.FC = () => {
         }, 500);
         spamState.current.hasWarned = true;
       }
-      // Silently drop - don't emit
     } else {
       socket.emit({ type: 'MESSAGE', message: msg });
     }
 
-    // Update spam history
     spamState.current.history = [...recentHistory, { time: now, text }];
   };
 
@@ -347,7 +336,6 @@ const App: React.FC = () => {
     });
 
     const unsubMsg = socket.on<MessagePayload>('MESSAGE', (data) => {
-      // Don't add if it's our own (already added locally for latency/anti-spam UX)
       if (data.message.senderId === currentUserIdRef.current) return;
       
       setMessages(prev => {
@@ -372,7 +360,6 @@ const App: React.FC = () => {
 
     const unsubAccept = socket.on<ChatAcceptPayload>('CHAT_ACCEPT', (data) => {
       if (data.room.participants.includes(currentUserIdRef.current)) {
-        // Securely store personal session token for rejoin
         if (data.room.participantTokens && data.room.reconnectCode) {
             const myToken = data.room.participantTokens[currentUserIdRef.current];
             if (myToken) {
@@ -454,7 +441,6 @@ const App: React.FC = () => {
       if (data.topic) setSessionTopic(data.topic);
       if (data.nextReset) {
         setCommTimerEnd(data.nextReset);
-        // Reset anti-spam warn state for new session
         spamState.current.hasWarned = false;
       }
       setMessages(prev => prev.filter(m => m.roomId !== 'community'));
@@ -516,7 +502,7 @@ const App: React.FC = () => {
     return (
       <div className="fixed inset-0 z-[1000] bg-slate-950 flex items-center justify-center p-6 text-center">
         <div className="max-w-md w-full p-8 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl animate-in zoom-in-95">
-          <div className="text-4xl mb-4">👻</div>
+          <div className="text-4xl mb-4 text-blue-500">👻</div>
           <h2 className="text-2xl font-black mb-4 uppercase tracking-tighter text-white">Entry Protocols</h2>
           <p className="text-slate-400 mb-8 text-sm">GhostTalk is an anonymous space for adults. By entering, you confirm you are 18 or older.</p>
           <button onClick={() => setIsAgeVerified(true)} className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl uppercase tracking-widest shadow-xl active:scale-95 transition-transform duration-200">I am 18+</button>
@@ -545,14 +531,14 @@ const App: React.FC = () => {
         {activeRoomType === RoomType.PRIVATE && activePrivateRoom && (
           <>
             <div>
-              <h4 className="text-[9px] font-black uppercase text-indigo-500 tracking-widest mb-3">Secret Restore Key</h4>
-              <div className="bg-indigo-900/20 p-3 rounded-lg border border-indigo-500/20">
-                <p className="text-[9px] text-indigo-400 uppercase font-black mb-0.5">Restore Code</p>
+              <h4 className="text-[9px] font-black uppercase text-blue-500 tracking-widest mb-3">Secret Restore Key</h4>
+              <div className="bg-blue-600/10 p-3 rounded-lg border border-blue-600/20">
+                <p className="text-[9px] text-blue-400 uppercase font-black mb-0.5">Restore Code</p>
                 <p className="text-xs font-mono font-bold text-white tracking-widest">{activePrivateRoom.reconnectCode}</p>
               </div>
             </div>
             <div>
-              <h4 className="text-[9px] font-black uppercase text-indigo-500 tracking-widest mb-3">PRIVATE CHAT GUIDELINES</h4>
+              <h4 className="text-[9px] font-black uppercase text-blue-500 tracking-widest mb-3">PRIVATE CHAT GUIDELINES</h4>
               <ul className="text-[10px] text-slate-400 space-y-2 font-medium">
                 <li>• Private chat starts only with mutual consent.</li>
                 <li>• Each private chat lasts 30 minutes.</li>
@@ -585,9 +571,9 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <div className="bg-red-950/20 border border-red-500/20 p-3 rounded-lg mb-4">
-          <h4 className="text-[9px] font-black uppercase text-red-500 tracking-widest mb-2">18+ NOTICE</h4>
-          <p className="text-[10px] text-red-400/80 font-medium leading-relaxed">
+        <div className="bg-blue-600/5 border border-blue-600/10 p-3 rounded-lg mb-4">
+          <h4 className="text-[9px] font-black uppercase text-blue-400 tracking-widest mb-2">18+ NOTICE</h4>
+          <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
             For adults only.<br/>
             Consensual adult conversations are allowed.<br/>
             Illegal activity, exploitation, or harm is strictly prohibited.
@@ -596,15 +582,15 @@ const App: React.FC = () => {
       </div>
 
       <div className="shrink-0 pt-4 border-t border-white/5 space-y-2 mt-2 pb-2">
-        <button onClick={() => { setShowInfoModal(true); setShowSidebar(false); }} className="w-full py-2.5 bg-slate-800 rounded-lg text-[9px] font-black uppercase border border-white/5 flex items-center justify-center space-x-1.5 hover:bg-slate-700 transition-all active:scale-95 text-slate-300">
-          <span className="text-[10px] font-bold">ⓘ</span><span>Information Center</span>
+        <button onClick={() => { setShowReconnectModal(true); setShowSidebar(false); }} className="w-full py-2.5 bg-slate-900 rounded-lg text-[9px] font-black uppercase border border-white/5 flex items-center justify-center space-x-1.5 hover:bg-slate-800 transition-all active:scale-95 text-slate-300">
+          <span className="text-blue-500">🔑</span><span>Restore Session</span>
         </button>
-        <button onClick={() => { setShowReconnectModal(true); setShowSidebar(false); }} className="w-full py-2.5 bg-slate-800 rounded-lg text-[9px] font-black uppercase border border-white/5 flex items-center justify-center space-x-1.5 hover:bg-slate-700 transition-all active:scale-95 text-slate-300">
-          <span>🔑</span><span>Restore Session</span>
-        </button>
-        <a href={BMC_LINK} target="_blank" rel="noopener noreferrer" className="w-full py-3 bg-blue-600/10 text-blue-400 rounded-lg text-[9px] font-black uppercase text-center border border-blue-600/20 hover:bg-blue-600/20 transition-all flex items-center justify-center space-x-1.5 active:scale-95">
-          <span>☕</span><span>Buy Me a Coffee</span>
+        <a href={BMC_LINK} target="_blank" rel="noopener noreferrer" className="w-full py-2.5 bg-slate-900 rounded-lg text-[9px] font-black uppercase border border-white/5 flex items-center justify-center space-x-1.5 hover:bg-slate-800 transition-all active:scale-95 text-slate-300 no-underline">
+          <span className="text-blue-500">☕</span><span>Buy Me a Coffee</span>
         </a>
+        <button onClick={() => { setShowInfoModal(true); setShowSidebar(false); }} className="w-full py-2.5 bg-slate-900 rounded-lg text-[9px] font-black uppercase border border-white/5 flex items-center justify-center space-x-1.5 hover:bg-slate-800 transition-all active:scale-95 text-slate-300">
+          <span className="text-[10px] font-bold text-blue-500">ⓘ</span><span>Information Center</span>
+        </button>
       </div>
     </div>
   );
@@ -634,7 +620,7 @@ const App: React.FC = () => {
             <div className="relative">
               <button onClick={() => { setShowNotificationMenu(!showNotificationMenu); setShowPeersMenu(false); }} className={`p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-all border border-white/5 active:scale-90 ${activeIncomingRequest ? 'animate-bell-shake text-blue-400' : 'text-slate-400'}`}>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-                {activeIncomingRequest && <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>}
+                {activeIncomingRequest && <span className="absolute top-0 right-0 w-2 h-2 bg-blue-500 rounded-full"></span>}
               </button>
               {showNotificationMenu && (
                 <div className="absolute right-0 mt-2 w-56 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-[150] p-3 animate-in fade-in zoom-in-95 duration-200">
@@ -694,11 +680,11 @@ const App: React.FC = () => {
 
                   return (
                     <div key={room.id} className="flex ml-1 items-stretch">
-                      <button onClick={() => { setActiveRoomId(room.id); setActiveRoomType(RoomType.PRIVATE); }} className={`px-4 py-1.5 rounded-l-lg flex items-center space-x-2 transition-all active:scale-95 ${activeRoomId === room.id ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                      <button onClick={() => { setActiveRoomId(room.id); setActiveRoomType(RoomType.PRIVATE); }} className={`px-4 py-1.5 rounded-l-lg flex items-center space-x-2 transition-all active:scale-95 ${activeRoomId === room.id ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
                         <span className="text-[9px] font-black uppercase">Secret</span>
                         <span className="text-[8px] font-bold opacity-70">{timeStr}{rejoinStr}</span>
                       </button>
-                      <button onClick={(e) => { e.stopPropagation(); exitPrivateRoom(room.id); }} className={`px-2 flex items-center justify-center rounded-r-lg transition-all border-l border-white/10 hover:bg-red-500/30 active:bg-red-600/50 ${activeRoomId === room.id ? 'bg-indigo-700 text-white' : 'bg-slate-900 text-slate-600'}`}>✕</button>
+                      <button onClick={(e) => { e.stopPropagation(); exitPrivateRoom(room.id); }} className={`px-2 flex items-center justify-center rounded-r-lg transition-all border-l border-white/10 hover:bg-red-500/30 active:bg-red-600/50 ${activeRoomId === room.id ? 'bg-blue-700 text-white' : 'bg-slate-900 text-slate-600'}`}>✕</button>
                     </div>
                   );
                 })}
@@ -713,7 +699,7 @@ const App: React.FC = () => {
             </div>
 
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden h-full">
-              {isFinalFive && <div className="z-20 bg-indigo-500/20 text-indigo-300 px-3 py-1 text-[8px] font-black uppercase text-center border-b border-white/5 animate-pulse">Session fading soon...</div>}
+              {isFinalFive && <div className="z-20 bg-blue-500/20 text-blue-300 px-3 py-1 text-[8px] font-black uppercase text-center border-b border-white/5 animate-pulse">Session fading soon...</div>}
               <ChatBox messages={activeMessages} currentUser={currentUser} onSendMessage={handleSendMessage} title={activeRoomType === RoomType.COMMUNITY ? 'Global' : 'Secret'} roomType={activeRoomType} onUserClick={(userId, username) => setUserPopup({ userId, username })} />
             </div>
 
@@ -752,9 +738,9 @@ const App: React.FC = () => {
 
       {showContactNotice && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl flex items-center justify-center z-[600] p-4 animate-in fade-in duration-300" onClick={() => setShowContactNotice(null)}>
-          <div className="bg-slate-900 p-8 rounded-[2rem] w-full max-w-[340px] border border-indigo-500/30 shadow-[0_0_50px_rgba(79,70,229,0.2)] animate-in zoom-in-95 duration-200 text-center" onClick={e => e.stopPropagation()}>
-            <div className="w-16 h-16 bg-indigo-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-indigo-500/20">
-              <span className="text-2xl">📱</span>
+          <div className="bg-slate-900 p-8 rounded-[2rem] w-full max-w-[340px] border border-blue-500/30 shadow-[0_0_50px_rgba(37,99,235,0.2)] animate-in zoom-in-95 duration-200 text-center" onClick={e => e.stopPropagation()}>
+            <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-blue-600/20">
+              <span className="text-2xl text-blue-500">📱</span>
             </div>
             <h3 className="text-lg font-black text-white uppercase mb-4 tracking-tight">Final Minutes</h3>
             <div className="text-slate-400 text-[11px] font-medium leading-relaxed mb-8 whitespace-pre-wrap">
@@ -765,7 +751,7 @@ const App: React.FC = () => {
             </div>
             <button 
               onClick={() => setShowContactNotice(null)} 
-              className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-indigo-900/20 active:scale-95 transition-transform"
+              className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-blue-900/20 active:scale-95 transition-transform"
             >
               OK
             </button>
@@ -777,7 +763,7 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl flex items-center justify-center z-[500] p-4 animate-in fade-in duration-300" onClick={() => setShowExtendPopup(null)}>
           <div className="bg-slate-900 p-8 rounded-[2rem] w-full max-w-[320px] border border-blue-500/30 shadow-[0_0_50px_rgba(37,99,235,0.2)] animate-in zoom-in-95 duration-200 text-center" onClick={e => e.stopPropagation()}>
             <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-blue-600/20">
-              <span className="text-2xl">⏳</span>
+              <span className="text-2xl text-blue-500">⏳</span>
             </div>
             <h3 className="text-lg font-black text-white uppercase mb-4 tracking-tight">Time Fading</h3>
             
@@ -794,7 +780,7 @@ const App: React.FC = () => {
                 <p className="text-slate-400 text-xs font-medium leading-relaxed mb-8">Final Chance: Session expires in 2 minutes. Extend or end chat?</p>
                 <div className="space-y-3">
                   <button onClick={() => handleExtensionDecision(showExtendPopup.roomId, '2min', 'EXTEND')} className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-blue-900/20 active:scale-95 transition-transform">Extend 30 minutes</button>
-                  <button onClick={() => handleExtensionDecision(showExtendPopup.roomId, '2min', 'END')} className="w-full py-3 text-red-500/70 font-bold uppercase text-[9px] tracking-widest active:scale-95">End Chat</button>
+                  <button onClick={() => handleExtensionDecision(showExtendPopup.roomId, '2min', 'END')} className="w-full py-3 text-slate-500 font-bold uppercase text-[9px] tracking-widest active:scale-95">End Chat</button>
                 </div>
               </>
             )}
@@ -865,7 +851,7 @@ const App: React.FC = () => {
                   {feedbackError && <p className="text-[10px] font-black text-red-500 uppercase">{feedbackError}</p>}
                   
                   {feedbackStatus === 'success' ? (
-                    <div className="py-3 bg-green-500/10 border border-green-500/20 text-green-400 text-center text-[10px] font-black uppercase rounded-xl animate-in zoom-in-95">Feedback Received. Thank you.</div>
+                    <div className="py-3 bg-blue-500/10 border border-green-500/20 text-green-400 text-center text-[10px] font-black uppercase rounded-xl animate-in zoom-in-95">Feedback Received. Thank you.</div>
                   ) : (
                     <button 
                       type="submit" 
